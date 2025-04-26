@@ -1,11 +1,11 @@
 import java.util.*;
 import java.time.format.DateTimeFormatter;
 import java.time.LocalTime;
-public class Main {
-    static int ident=10000;
-    static int Id_Candidato=1;
+public class Main{
+    static int ident=10000;    //1
+    static int Id_Candidato=1; //1
 
-    public static class UrnaElectoral{ //Clase de complejidad (16n + 41) = O(n)
+    public static class UrnaElectoral{ //Clase de complejidad (3n^2 + 35n + 5m + 51) = O(n^2)
         public listaCandidatos lista; //1
         public static class listaCandidatos{ //(4)
             public Candidato candidato;       //1
@@ -36,34 +36,82 @@ public class Main {
         public Boolean verificarVotante(Votante votante){ //(1)
             return votante.getYaVoto();                    //1
         }
-        public Boolean registrarVoto(Votante votante, int candidatoId){ //(12)
-            if(verificarVotante(votante)){                              //1
-                System.out.println("No puede votar de nuevo.");         //1
-                return false;                                           //1
-            }
-            else{                                                       //1
-                Voto voto = new Voto(votante.getId(), candidatoId);     //1
-                historialVotos.push(voto);                              //1
-                Candidato candidato=buscarCandidato(candidatoId);       //1
-                if(candidato!=null){                                    //1
-                    candidato.AgregarVoto(voto);                        //1
+        public Boolean registrarVoto(Votante votante, int candidatoId){    //(5n + 5m + 15)
+            Stack<Voto> ActualHistorial=historialVotos;                     //1
+            Queue<Voto> ActualHisReports=votosReportados;                   //1
+            while(!ActualHistorial.isEmpty() || !ActualHisReports.isEmpty()){         //n+m
+                if(!ActualHistorial.isEmpty() && ActualHistorial.peek().getVotanteId()==votante.getId()){ //n+m
+                    System.out.println("No puede votar de nuevo.");                                       //1
+                    return false;                                                                         //1
                 }
-                votante.marcarComoVotado();                             //1
-                System.out.println("Se ha registrado el voto.");        //1
-                return true;                                            //1
+                else if(!ActualHisReports.isEmpty() && ActualHisReports.peek().getVotanteId()==votante.getId()){ //n+m
+                    System.out.println("No puede votar de nuevo.");                                              //1
+                    return false;                                                                                //1
+                }
+                else{
+                    ActualHisReports.poll();                                //n+m
+                    ActualHistorial.pop();                                  //n+m
+                }
             }
+            Voto voto = new Voto(votante.getId(), candidatoId);     //1
+            Candidato candidato=buscarCandidato(candidatoId);       //1
+            if(candidato!=null){                                    //1
+                candidato.AgregarVoto(voto);                        //1
+                historialVotos.push(voto);                          //1
+            }
+            else{
+                votosReportados.add(voto);                          //1
+            }
+            votante.marcarComoVotado();                             //1
+            System.out.println("Se ha registrado el voto.");        //1
+            return true;                                            //1
         }
-        public void agregarCandidato(Candidato candidato){             //(2n + 6)
+        public void agregarCandidato(Candidato candidato){             //(2n + 5)
             listaCandidatos nuevoNodo = new listaCandidatos(candidato); //1
             if(lista==null){                                            //1
                 lista=nuevoNodo;                                        //1
             }
-            else{                                                       //1
+            else{
                 listaCandidatos actual=lista;                           //1
                 while (actual.siguiente!=null){                         //n
                     actual=actual.siguiente;                            //n
                 }
                 actual.siguiente=nuevoNodo;                             //1
+            }
+        }
+        public void eliminarCandidato(int idCandidato){             //(3n^2 +12n +8)
+            listaCandidatos actual=lista;                                   //1
+            listaCandidatos anterior=null;                                  //1
+            boolean encontrado=false;                                       //1
+            while(actual!=null){                                            //n
+                if(actual.candidato.getId()==idCandidato){                  //n
+                    while(!actual.candidato.votosRecibidos.isEmpty()){      //n*n
+                        Voto voto=actual.candidato.votosRecibidos.poll();   //n*n
+                        votosReportados.add(voto);                          //n*n
+                    }
+                    if(anterior==null){                                     //n
+                        lista=actual.siguiente;                             //n
+                    }
+                    else{
+                        anterior.siguiente=actual.siguiente;                //n
+                    }
+                    encontrado=true;                                        //n
+                    break;                                                  //n
+                }
+                anterior=actual;                                            //n
+                actual=actual.siguiente;                                    //n
+            }
+            if(encontrado){                                                                     //1
+                listaCandidatos siguiente=(anterior==null) ? lista : anterior.siguiente;        //1
+                while(siguiente!=null){                                                         //n
+                    siguiente.candidato.decrementarId();                                        //n
+                    siguiente=siguiente.siguiente;                                              //n
+                }
+                Id_Candidato--;                                                                 //1
+                System.out.println("Candidato eliminado, votos movidos y IDs reajustados.");    //1
+            }
+            else{
+                System.out.println("No se encontró un candidato con ese ID.");                  //1
             }
         }
         public Candidato buscarCandidato(int id){ //(4n + 2)
@@ -85,22 +133,24 @@ public class Main {
                 actual=actual.siguiente;                                          //n
             }
         }
-        public void PrintVotos(){                                                              //(4n + 4)
-            Stack<Voto> actualPila=historialVotos;                                              //1
-            System.out.println("Lista de votos validos:\n------------------------");            //1
-            while(actualPila!=null){                                                            //n
-                System.out.println("Voto: " + actualPila.peek().getId() +                       //n
-                                "\n|Candidato id: " + actualPila.peek().getCandidatoId() +
-                                "\n|Votante id: " + actualPila.peek().getVotanteId() +
-                                "\n|Hora: " + actualPila.pop().getTimeStamp() + "\n--------");
+        public void PrintVotos(){                                                   //(6n + 4)
+            Stack<Voto> actualPila=historialVotos;                                   //1
+            System.out.println("Lista de votos válidos:\n------------------------"); //1
+            while(!actualPila.isEmpty()){                                            //n
+                Voto voto=actualPila.pop();                                          //n
+                System.out.println("Voto: " + voto.getId() +                         //n
+                                 "\n|Candidato id: " + voto.getCandidatoId() + 
+                                 "\n|Votante id: " + voto.getVotanteId() + 
+                                 "\n|Hora: " + voto.getTimeStamp() + "\n--------");
             }
-            Queue<Voto> actualCola=votosReportados;                                             //1
-            System.out.println("\nLista de votos nulos:\n---------------------");               //1
-            while(actualCola!=null){                                                            //n
-                System.out.println("Voto: " + actualCola.peek().getId() +                       //n
-                                "\n|Candidato id: " + actualCola.peek().getCandidatoId() +
-                                "\n|Votante id: " + actualCola.peek().getVotanteId() +
-                                "\n|Hora: " + actualCola.poll().getTimeStamp() + "\n--------");
+            Queue<Voto> actualCola=votosReportados;                                  //1
+            System.out.println("\nLista de votos nulos:\n---------------------");    //1
+            while(!actualCola.isEmpty()){                                            //n
+                Voto voto=actualCola.poll();                                         //n
+                System.out.println("Voto: " + voto.getId() +                         //n
+                                 "\n|Candidato id: " + voto.getCandidatoId() + 
+                                 "\n|Votante id: " + voto.getVotanteId() + 
+                                 "\n|Hora: " + voto.getTimeStamp() + "\n--------");
             }
         }
         public void PrintResultados(){                                             //(3n + 1)
@@ -114,7 +164,7 @@ public class Main {
             }
         }
     }
-    public static class Candidato{ //clase de complejidad (19) = O(1)
+    public static class Candidato{ //clase de complejidad (20) = O(1)
         private int id;                      //1
         private String nombre;               //1
         private String partido;              //1
@@ -152,6 +202,9 @@ public class Main {
         }
         public int getCantidadVotos(){    //(1)
             return votosRecibidos.size();  //1
+        }
+        public void decrementarId(){ //(1)
+            this.id--;                //1
         }
     }
     public static class Votante{ //clase de complejidad (11) = O(1)
@@ -232,19 +285,17 @@ public class Main {
         UrnaElectoral Urna = new UrnaElectoral();
         Scanner sc = new Scanner(System.in);
         int x;
-        Boolean T=true;
         System.out.println("Ajustes de la votacion");
         while(true){
             System.out.print("\nSelecciona una opcion para la proxima votacion:" +
                         "\n1) Añadir Candidato." +
                         "\n2) Eliminar Candidato." +
-                        "\n3) Ver Lista de Candidatos" +
-                        "\n4) Ver Votosp" +
-                        "\n5) Iniciar Votacion" +
+                        "\n3) Ver Lista de Candidatos." +
+                        "\n4) Ver Votos." +
+                        "\n5) Iniciar Votacion." +
                         "\n0) Cerrar Programa..." +
                         "\nOpción: ");
             x=sc.nextInt();
-
             switch(x){
                 case 1: //Añadir Candidato
                     System.out.print("Ingrese nombre del candidato: ");
@@ -256,45 +307,33 @@ public class Main {
                     Urna.agregarCandidato(nuevoCandidato);
                     System.out.println("Candidato agregado con éxito.");
                     break;
-
+                    
                 case 2: //Borrar Candidato
+                    if(Urna.lista==null){
+                        System.out.println("No hay candidatos registrados.");
+                        break;
+                    }
                     System.out.print("Ingrese el ID del candidato que desea eliminar: ");
-                    sc.nextLine();
                     int idEliminar=sc.nextInt();
-                    UrnaElectoral.listaCandidatos actual=Urna.lista;
-                    UrnaElectoral.listaCandidatos anterior=null;
-                    while(actual!=null){
-                        if(actual.candidato.getId()==idEliminar){
-                            if(anterior==null){
-                                Urna.lista=actual.siguiente;
-                            }
-                            else{
-                                anterior.siguiente=actual.siguiente;
-                            }
-                            System.out.println("Candidato eliminado con éxito.");
-                            break;
-                        }
-                        anterior=actual;
-                        actual=actual.siguiente;
-                    }
-
-                    if(actual==null){
-                        System.out.println("No se encontró un candidato con ese ID.");
-                    }
+                    Urna.eliminarCandidato(idEliminar);
                     break;
-
+                    
                 case 3: //Print Lista de Candidatos
                     System.out.println("\nLista de candidatos:");
                     Urna.PrintListaCandidatos();
                     break;
-
+                    
                 case 4: //Ver Votos
                     if(Urna.getHistorialVotos()!=null || Urna.getVotosReportados()!=null){
                         Urna.PrintVotos();
                     }
+                    else{
+                        System.out.println("No hay votos registrados.");
+                    }
                     break;
                     
                 case 5: //Iniciar la Votacion
+                    Boolean T=false;
                     if(Urna.lista!=null){
                         T=true;
                     }
@@ -302,13 +341,13 @@ public class Main {
                         System.out.println("\nNo se registraron candidatos para la votacion.");
                         break;
                     }
-                    while (T) {
+                    while(T){
                         System.out.print("\nComienza la votacion, seleccione una opcion:" + 
                                       "\n1) Ver Lista de Candidatos." +
                                       "\n2) Registrar Voto." +
                                       "\n3) Finalizar Votacion." +
                                       "\nOpción: ");
-                        int z = sc.nextInt();
+                        int z=sc.nextInt();
                         sc.nextLine();
                         switch (z) {
                             case 1: //Ver Lista de Candidatos
@@ -319,18 +358,17 @@ public class Main {
                             case 2: //Registrar Voto
                                 Votante votante = new Votante();
                                 
-                                
                                 System.out.print("Ingrese nombre del votante: ");
                                 sc.nextLine();
-                                String nombreVotante = sc.nextLine();
+                                String nombreVotante=sc.nextLine();
                                 votante.setNombre(nombreVotante);
                                 
                                 System.out.print("Ingrese rut del votante (sin puntos ni guión): ");
-                                int idVotante = sc.nextInt();
+                                int idVotante=sc.nextInt();
                                 votante.setId(idVotante);
                                 
                                 System.out.print("Ingrese número del candidato a votar: ");
-                                int idCandidato = sc.nextInt();
+                                int idCandidato=sc.nextInt();
                                 Urna.registrarVoto(votante, idCandidato);
                                 break;
                                 
@@ -342,7 +380,7 @@ public class Main {
                         }
                     }
                     break;
-
+                    
                 default:
                     System.out.println("\n|Programa finalizado|");
                     sc.close();
